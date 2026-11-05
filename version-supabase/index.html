@@ -88,7 +88,7 @@ textarea{resize:vertical;min-height:70px}
 .rollline .tot{font-family:var(--f-mono);font-weight:600;font-size:20px;min-width:2ch;text-align:center}
 .die{width:30px;height:30px;flex:none;color:var(--candle)}
 .sys{font-size:14px;color:var(--muted);padding-left:4px;border-left:2px solid var(--line);padding-block:2px;padding-right:0;margin-left:2px}
-.compose{position:sticky;bottom:0;background:linear-gradient(transparent,var(--bg) 18px);padding-block:18px calc(10px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px}
+.compose{background:var(--bg);padding-block:12px calc(10px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px}
 .compose .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
 .compose textarea{min-height:52px;border:none;background:transparent;padding:4px}
 .compose textarea:focus-visible{outline:none}
@@ -411,6 +411,11 @@ MAGIA Y LEYENDAS
 - Los magos crecen de Aprendiz arcano a Mago, Maestro mago, Gran maestro y Archimago con su nivel y con los hechizos propios que inventan. Un hechizo propio solo lo conoce su creador y solo él puede enseñarlo: respeta los efectos que ves en la ficha (equilibrados, con costes y riesgos), y ofrece pistas, grimorios y experiencias que inspiren nuevos hechizos. Puedes otorgar el rango con "rangoArcano".
 - Existen reliquias legendarias muy difíciles de conseguir: la Fuente de la Juventud, la Piedra Filosofal, el elixir de la vida, pactos con seres antiguos. Requieren grandes búsquedas y tienen precio. Sus efectos se aplican con "longevidad": {"tipo":"juventud"} (deja de envejecer), {"tipo":"inmortal"} (no muere de viejo) o {"tipo":"rejuvenecer","anios":10}. Las reliquias pueden ser objetos con "tipo":"reliquia".
 
+OPCIONES Y FOCO (obligatorio)
+- En cada turno, da a CADA personaje humano en escena exactamente 3 opciones distintas en "opcionesPJ" (A, B y C): concretas, con estilos diferentes (por ejemplo prudente, audaz y astuta o social) y con consecuencias distintas. El jugador también puede escribir una cuarta opción libre: si lo hace (su acción en el registro no coincide con ninguna opción), analízala con cuidado, respétala y adapta la historia a ella con consecuencias coherentes.
+- Cada personaje tiene un FOCO (lo verás en su línea): aventura, hogar y familia, negocios, reino, dominio, una organización, su ejército, sus asentamientos, el estudio arcano o su fe. Las situaciones y las 3 opciones de ese personaje deben tratar sobre su foco. Si varios personajes tienen focos distintos, alterna escenas cortas para cada uno.
+- En cualquier foco, mezcla oportunidades de conocer gente nueva, amistad, rivalidad, romance y encuentros íntimos (solo con quien lo permite en su ficha), para que la vida social nunca desaparezca.
+
 RITMO RÁPIDO (muy importante)
 - En cada turno tiene que pasar algo nuevo: un encuentro, un PNJ con una propuesta, un rumor, una amenaza, un tesoro, una complicación, una oportunidad de ascenso, de romance, de negocio o de intriga. Nunca dejes la escena quieta.
 - Genera aventuras según lo que hace y quiere cada personaje: si uno busca poder, ofrécele cargos y enemigos; si busca amor, cruces con personas interesantes; si busca riqueza, negocios y robos. Da a cada personaje humano al menos un "gancho" personal por turno.
@@ -481,6 +486,7 @@ Escribe primero la narración en texto plano. Después escribe una línea que co
  "tienda":{"abierta":true,"lugar":"Valdeniebla","precios":1,"especiales":[{"objeto":{"nombre":"","tipo":"objeto"},"precio":50}]},
  "combate":{"activo":true,"ronda":1,"enemigos":[{"nombre":"Ahogado 1","pg":15,"pgMax":15,"ca":8,"init":-2}]},
  "opciones":["tres sugerencias cortas de lo que podrían hacer"],
+ "opcionesPJ":[{"pj":"ID","opciones":["A: opción concreta","B: otra distinta","C: otra distinta"]}],
  "ganchos":[{"pj":"ID","texto":"una oportunidad personal para ese personaje, según su historia, ambiciones y relaciones"}],
  "escena":"lugar actual en pocas palabras",
  "avanzarActo":false,
@@ -751,13 +757,36 @@ async function doRoll(ch,bonus,label,cd,rollId){if(ch&&!ch.ia&&ch.enEscena===fal
  if(SKA[label]&&datos.exito&&datos.cd!=null){const pr={...(ch.practica||{})};const before=practRank(ch,label);pr[label]=(pr[label]||0)+1;try{await charRef(ch.id).update({practica:pr});}catch(e){}if(PRACT.filter(t=>pr[label]>=t).length>before)await addLog({tipo:'sistema',texto:ch.nombre+' mejora con la práctica en '+label+' (rango '+(before+1)+', '+fm(before+1)+').'});}
  return datos;}
 
+
+/* ---------- Foco del personaje y opciones A/B/C ---------- */
+function focosDe(ch){const f=[{tipo:'aventura',n:'Aventura',ref:null}];
+ if((ch.hijos||[]).length||(ch.relaciones||[]).some(r=>['Relación','Compromiso','Matrimonio'].includes(r.etapa))||(ch.propiedades||[]).some(p=>p.tipo==='casa'))f.push({tipo:'hogar',n:'Hogar y familia',ref:null});
+ if((ch.propiedades||[]).some(p=>p.tipo==='negocio'))f.push({tipo:'negocios',n:'Negocios',ref:null});
+ for(const r of polOf().reinos.filter(r=>isRuler(ch,r.nombre)))f.push({tipo:'reino',n:'Reino: '+r.nombre,ref:r.nombre});
+ for(const p of (ch.propiedades||[]).filter(p=>grupoProp(p)==='dominio'))f.push({tipo:'dominio',n:'Dominio: '+p.nombre,ref:p.nombre});
+ for(const o of orgsDe(ch.id))f.push({tipo:'organizacion',n:o.nombre,ref:o.id});
+ if(tropasDe(ch)>0)f.push({tipo:'ejercito',n:'Ejército ('+tropasDe(ch)+')',ref:null});
+ if((S.camp.asentamientos||[]).some(a=>a.fundador===ch.id))f.push({tipo:'asentamiento',n:'Mis asentamientos',ref:null});
+ if(esLanzador(ch))f.push({tipo:'magia',n:'Estudio arcano',ref:null});
+ if(ch.fe&&(S.camp.religiones||[]).some(r=>r.fundador===ch.id))f.push({tipo:'fe',n:'Mi fe',ref:null});
+ return f;}
+function focoActual(ch){const f=ch.foco;if(!f)return{tipo:'aventura',n:'Aventura',ref:null};const ok=focosDe(ch).find(x=>x.tipo===f.tipo&&(x.ref||null)===(f.ref||null));return ok||{tipo:'aventura',n:'Aventura',ref:null};}
+const FOCO_TXT={aventura:'explorar, viajar, mazmorras, combates, encargos y descubrimientos',hogar:'su casa, su pareja, sus hijos, la vida doméstica, las fiestas y los problemas familiares',negocios:'sus negocios: clientes, competidores, empleados, proveedores, extorsiones, expansión',reino:'el gobierno del reino: consejo, corte, nobles, impuestos, leyes, embajadas, guerras, conspiraciones y súbditos',dominio:'gobernar su dominio: vasallos, cosechas, justicia, defensa, mejoras y peticiones',organizacion:'dirigir su organización: misiones, rivales, miembros ambiciosos, crecimiento y golpes',ejercito:'mandar su ejército: maniobras, asedios, moral, suministros, batallas y botín',asentamiento:'hacer crecer sus asentamientos: colonos, construcciones, peligros, comercio y vecinos',magia:'el estudio arcano: investigación, grimorios, experimentos, aprendices, rivales mágicos y poder',fe:'su fe: fieles, templos, milagros, herejías, profecías y enemigos religiosos'};
+async function setFoco(ch,f){try{await charRef(ch.id).update({foco:{tipo:f.tipo,ref:f.ref||null}});}catch(e){return writeErr(e);}await addLog({tipo:'sistema',pj:ch.id,texto:ch.nombre+' se centra ahora en: '+f.n+'.'});}
+function focoBar(ch){const fs=focosDe(ch);const cur=focoActual(ch);return h('div',{class:'stack',style:'gap:4px'},h('span',{class:'label'},'Foco de '+ch.nombre),h('div',{class:'tabs',role:'tablist','aria-label':'Foco del personaje',style:'flex-wrap:wrap'},fs.map(f=>{const on=f.tipo===cur.tipo&&(f.ref||null)===(cur.ref||null);return h('button',{class:on?'on':'',role:'tab','aria-selected':on?'true':'false',onclick:()=>{if(!on)setFoco(ch,f);}},f.n);})));}
+async function elegirOpcion(ch,txt,letra){marcarVisto();await markReturn(ch);await addLog({tipo:'accion',pj:ch.id,texto:txt,opcion:letra});}
+function opcionesUI(ch){const ops=((S.camp.opcionesPJ||{})[ch.id]||[]).slice(0,3);const yaElegida=S.log.slice().reverse().find(e=>e.tipo==='master');const elegida=yaElegida?S.log.find(e=>e.pj===ch.id&&e.tipo==='accion'&&e.t>yaElegida.t):null;
+ if(!ops.length)return null;return h('div',{class:'stack',style:'gap:6px'},h('span',{class:'label gold'},'¿Qué hace '+ch.nombre+'?'),...ops.map((o,i)=>{const L='ABC'[i];const esta=elegida&&elegida.opcion===L;return h('button',{class:'opt'+(esta?' on':''),style:'text-align:left',disabled:!!elegida&&!esta?'':null,onclick:()=>{if(!elegida)elegirOpcion(ch,o,L);}},h('b',null,L+' · '),o);}),
+  h('button',{class:'opt',style:'text-align:left',onclick:()=>{composerText.focus();composerText.placeholder='Escribe lo que quieras hacer: el máster se adaptará.';}},h('b',null,'D · '),'Otra cosa: escribe tu propia decisión abajo'),elegida&&!elegida.opcion?h('span',{class:'faint',style:'font-size:13px'},'Has escrito tu propia decisión.'):null);}
+
 let composerEl=null,composerText=null;
 function composer(){const allp=party();if(!allp.length)return null;if(S.camp&&S.camp.terminada)return h('div',{class:'compose'},h('div',{class:'box'},h('p',{class:'muted'},'La campaña ha terminado. Podéis reabrirla desde la pestaña Mundo.')));const hum=allp.filter(c=>!c.ia&&!(c.estados||[]).some(x=>['muerto','retirado'].includes(x)));const ps=hum.length?hum:allp;if(S.playAs&&S.chars[S.playAs]&&S.chars[S.playAs].ia&&hum.length)S.playAs=hum[0].id;if(!S.playAs||!S.chars[S.playAs])S.playAs=ps[0].id;
  if(!composerText){composerText=h('textarea',{id:'accion',placeholder:'¿Qué hace tu personaje? Habla, explora, decide…','aria-label':'Acción de tu personaje',onkeydown:e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))sendAction();}});}
  const ch=S.chars[S.playAs];const busy=S.masterRunning;
  const sel=h('select',{'aria-label':'Jugando como',style:'width:auto;font-weight:700;color:'+colorOf(ch.id),onchange:e=>{S.playAs=e.target.value;refresh();}},ps.map(p=>h('option',{value:p.id,selected:p.id===S.playAs?'':null},p.nombre)));
- const opts=[...((S.camp.ganchos||{})[ch.id]||[]).slice(0,2).map(t=>'★ '+t),...(S.camp.opciones||[]).slice(0,3)];
+ const opUI=opcionesUI(ch);const opts=opUI?[]:[...((S.camp.ganchos||{})[ch.id]||[]).slice(0,2).map(t=>'★ '+t),...(S.camp.opciones||[]).slice(0,3)];
  const box=h('div',{class:'compose'},
+  focoBar(ch),opUI,
   opts.length?h('div',{class:'row',style:'gap:6px'},opts.map(o=>h('button',{class:'chip'+(o.startsWith('★')?' on':''),onclick:()=>{composerText.value=o.replace(/^★ /,'');composerText.focus();}},o))):null,
   h('div',{class:'box'},h('div',{class:'row',style:'gap:8px'},h('span',{class:'faint',style:'font-size:14px'},'Jugando como'),sel,ch.pg<=0?h('span',{class:'pill bad'},'Inconsciente'):null),composerText,
    h('div',{class:'row',style:'gap:6px;justify-content:space-between'},
@@ -1765,7 +1794,7 @@ function guionText(g,acto){const A=g.actos||[];return `Título: ${g.titulo}\nSin
  return `\n## Acto ${n}${n===acto?' (ACTUAL)':n<acto?' (completado)':''}: ${a.titulo} — nivel ${a.nivel}\nObjetivo: ${a.objetivo}`+(full?`\nEscenas:\n- ${a.escenas.join('\n- ')}\nEncuentros:\n- ${a.encuentros.join('\n- ')}\nDecisiones:\n- ${a.decisiones.join('\n- ')}\nRecompensa: ${a.recompensa}\nSalida: ${a.salida}`:'');}).join('\n')+(acto>A.length?'\n\n(TODOS LOS ACTOS COMPLETADOS: epílogo y nuevo arco improvisado.)':'');}
 function logForAI(e){const ch=S.chars[e.pj];const nm=ch?ch.nombre:(e.nombre||'?');
  if(e.tipo==='master')return 'MÁSTER: '+String(e.texto).slice(0,900);
- if(e.tipo==='accion')return `${nm} [${e.pj}] dice/hace: ${e.texto}`;
+ if(e.tipo==='accion')return `${nm} [${e.pj}] ${e.opcion?'elige la opción '+e.opcion:'ESCRIBE SU PROPIA DECISIÓN (adáptate)'}: ${e.texto}`;
  if(e.tipo==='tirada'){const d=e.datos||{};return `TIRADA de ${nm} [${e.pj}] · ${d.label}: ${d.total} (${d.detalle||''})${d.cd!=null?' vs CD '+d.cd+' → '+(d.exito?'ÉXITO':'FALLO'):''}`;}
  return 'SISTEMA: '+e.texto;}
 function buildPrompt(final){const c=S.camp;const M=c.mundo||{};const acto=c.acto||1;const ps=party();const lastM=[...S.log].reverse().findIndex(e=>e.tipo==='master');
@@ -1831,7 +1860,7 @@ Lugares: ${(M.lugares||[]).map(l=>l.nombre+': '+l.estado).join('; ')||'por defin
 ${final?'\n*** LOS JUGADORES HAN VOTADO TERMINAR LA PARTIDA ***':''}
 
 # PERSONAJES EN ESCENA (ID entre corchetes)
-${ps.filter(present).map(x=>(x.regreso?'[REGRESA: se quedó en '+(x.ultimaEscena||'otro lugar')+'; intégralo de forma orgánica en esta escena] ':'')+sheetLine(x)).join('\n')}
+${ps.filter(present).map(x=>(!x.ia?'[FOCO: '+focoActual(x).n+' → '+FOCO_TXT[focoActual(x).tipo]+'] ':'')+(x.regreso?'[REGRESA: se quedó en '+(x.ultimaEscena||'otro lugar')+'; intégralo de forma orgánica en esta escena] ':'')+sheetLine(x)).join('\n')}
 ${ps.filter(x=>!present(x)).length?'\nFUERA DE ESCENA (sus jugadores no están; no los uses, no les des PX ni efectos; siguen donde se quedaron): '+ps.filter(x=>!present(x)).map(x=>x.nombre+' (en '+(x.ultimaEscena||'?')+', nivel '+x.nivel+')').join('; '):''}
 
 # REGISTRO RECIENTE (del más antiguo al más reciente)
@@ -1941,6 +1970,7 @@ async function applyMaster(narr,data,final){const c=S.camp;const turno=(c.turno|
  const up={turno,lastMasterAt:Date.now()};
  if(typeof data.resumen==='string'&&data.resumen.trim())up.resumen=data.resumen.slice(0,3000);
  if(typeof data.escena==='string')up.escena=data.escena.slice(0,120);
+ if(Array.isArray(data.opcionesPJ)){const O={};for(const x of data.opcionesPJ.slice(0,12))if(x&&S.chars[x.pj]&&Array.isArray(x.opciones))O[x.pj]=x.opciones.slice(0,3).map(o=>String(o).replace(/^[ABC][:.)]\s*/,'').slice(0,220));up.opcionesPJ=O;}
  if(Array.isArray(data.ganchos)){const g={...(c.ganchos||{})};for(const x of data.ganchos.slice(0,12))if(x&&S.chars[x.pj]&&x.texto)g[x.pj]=[String(x.texto).slice(0,160),...(g[x.pj]||[])].slice(0,3);up.ganchos=g;}
  if(Array.isArray(data.opciones))up.opciones=data.opciones.slice(0,4).map(o=>String(o).slice(0,120));
  up.pendientes=(Array.isArray(data.tiradas)?data.tiradas:[]).filter(t=>t&&ids.has(t.pj)).slice(0,12).map(t=>({id:uid('r'),pj:t.pj,tipo:String(t.tipo||'habilidad'),nombre:String(t.nombre||''),cd:t.cd!=null&&t.cd!==''?Number(t.cd):null,motivo:String(t.motivo||'').slice(0,160)}));
